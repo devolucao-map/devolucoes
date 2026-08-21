@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101010">
+<title>Conferência de devolução</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#101010;
+  --field:#E6E4DE;
+  --paper:#FFFFFF;
+  --hazard:#FFD400;
+  --go:#12734F;
+  --stop:#C0271A;
+  --muted:#6B6862;
+  --line:#C9C6BE;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--field);color:var(--ink)}
+body{
+  font-family:'Barlow',system-ui,sans-serif;
+  font-size:17px;line-height:1.45;
+  padding-bottom:110px;
+  overflow-x:hidden;
+}
+.wrap{max-width:520px;margin:0 auto;padding:0 16px}
+
+/* ---------- faixa de sinalização (elemento assinatura) ---------- */
+.band{
+  height:14px;
+  background:repeating-linear-gradient(-45deg,var(--hazard) 0 14px,var(--ink) 14px 28px);
+  transition:background .25s ease;
+}
+body.is-sent .band{background:var(--go)}
+
+header{background:var(--ink);color:var(--paper);padding:14px 0 16px}
+header .wrap{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;font-size:27px;line-height:1;
+  text-transform:uppercase;letter-spacing:.045em;
+}
+h1 span{display:block;font-size:12px;font-weight:500;letter-spacing:.22em;color:var(--hazard);margin-bottom:5px}
+.tally{text-align:right;flex-shrink:0}
+.tally b{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;display:block;line-height:1}
+.tally i{font-style:normal;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+
+/* ---------- blocos de etapa ---------- */
+.step{background:var(--paper);border:1.5px solid var(--ink);margin-top:16px}
+.step[hidden]{display:none}
+.step-hd{
+  display:flex;align-items:center;gap:9px;
+  padding:11px 14px;border-bottom:1.5px solid var(--ink);
+}
+.step-hd b{
+  font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;
+  background:var(--ink);color:var(--paper);padding:2px 7px;
+}
+.step-hd h2{
+  font-family:'Barlow Condensed',sans-serif;font-weight:600;
+  font-size:19px;text-transform:uppercase;letter-spacing:.06em;
+}
+.step-hd em{margin-left:auto;font-style:normal;font-size:12px;color:var(--muted);letter-spacing:.05em}
+.step-bd{padding:14px}
+
+/* ---------- leitor ---------- */
+#viewfinder{
+  position:relative;width:100%;aspect-ratio:4/3;background:var(--ink);
+  display:none;overflow:hidden;
+}
+#viewfinder.on{display:block}
+#viewfinder video{width:100%;height:100%;object-fit:cover;display:block}
+.reticle{
+  position:absolute;inset:16% 12%;
+  border:3px solid var(--hazard);
+  box-shadow:0 0 0 2000px rgba(16,16,16,.45);
+}
+.reticle::after{
+  content:'';position:absolute;left:0;right:0;top:0;height:3px;background:var(--hazard);
+  animation:sweep 2.1s ease-in-out infinite;
+}
+@keyframes sweep{0%,100%{top:0}50%{top:calc(100% - 3px)}}
+@media (prefers-reduced-motion:reduce){.reticle::after{animation:none}}
+
+/* ---------- etiqueta térmica (assinatura) ---------- */
+.tag{
+  border-top:2px dashed var(--ink);border-bottom:2px dashed var(--ink);
+  padding:12px 4px;margin-bottom:12px;text-align:center;
+}
+.tag i{font-style:normal;display:block;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.tag b{font-family:'IBM Plex Mono',monospace;font-size:25px;font-weight:600;letter-spacing:.02em;word-break:break-all;display:block}
+
+/* ---------- botões ---------- */
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;min-height:56px;padding:12px 16px;
+  background:var(--ink);color:var(--paper);
+  border:1.5px solid var(--ink);
+  font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px;
+  text-transform:uppercase;letter-spacing:.07em;
+}
+.btn.ghost{background:var(--paper);color:var(--ink)}
+.btn.small{min-height:46px;font-size:16px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible,.opt:focus-visible,.slot:focus-visible,input:focus-visible{outline:3px solid var(--hazard);outline-offset:2px}
+.row{display:flex;gap:9px;margin-top:9px}
+.row .btn{flex:1}
+
+/* ---------- motivos ---------- */
+.opts{display:grid;gap:9px}
+.opt{
+  display:flex;align-items:center;gap:12px;width:100%;
+  min-height:58px;padding:10px 14px;text-align:left;
+  background:var(--paper);border:1.5px solid var(--line);
+  font-weight:500;
+}
+.opt s{
+  text-decoration:none;flex-shrink:0;width:22px;height:22px;
+  border:2px solid var(--ink);border-radius:50%;
+}
+.opt.sel{border-color:var(--ink);background:var(--hazard)}
+.opt.sel s{background:var(--ink);box-shadow:inset 0 0 0 3px var(--hazard)}
+.opt u{text-decoration:none;display:block}
+.opt u em{font-style:normal;display:block;font-size:12px;color:var(--muted);letter-spacing:.02em}
+.opt.sel u em{color:#5a4d00}
+
+/* ---------- contagem ---------- */
+.counts{display:none;gap:10px;margin-top:12px;padding-top:12px;border-top:1.5px dashed var(--line)}
+.counts.on{display:flex}
+.counts label{flex:1}
+.counts span{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.counts input{
+  width:100%;min-height:52px;padding:6px 12px;
+  font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;
+  border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);
+}
+
+/* ---------- fotos ---------- */
+.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.slot{
+  position:relative;aspect-ratio:3/4;width:100%;
+  border:1.5px dashed var(--line);background:var(--field);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  font-family:'Barlow Condensed',sans-serif;font-size:13px;
+  text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+  overflow:hidden;
+}
+.slot .plus{font-size:30px;line-height:.8;font-weight:600;color:var(--ink)}
+.slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.slot.filled{border-style:solid;border-color:var(--ink)}
+.slot .kill{
+  position:absolute;top:0;right:0;width:34px;height:34px;
+  background:var(--ink);color:var(--paper);font-size:19px;line-height:34px;text-align:center;
+}
+.hint{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.4}
+
+/* ---------- envio fixo ---------- */
+.dock{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;
+  background:var(--field);border-top:1.5px solid var(--ink);
+  padding:11px 16px calc(11px + env(safe-area-inset-bottom));
+}
+.dock .wrap{padding:0}
+.dock .btn{background:var(--go);border-color:var(--go);min-height:60px;font-size:22px}
+.dock .btn:disabled{background:var(--line);border-color:var(--line);color:#8a877f;opacity:1}
+
+/* ---------- histórico ---------- */
+.log{margin:18px 0 6px}
+.log h3{
+  font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin-bottom:9px;
+}
+.log ol{list-style:none;display:grid;gap:6px}
+.log li{
+  display:flex;align-items:center;gap:10px;
+  background:var(--paper);border-left:5px solid var(--go);
+  padding:9px 12px;font-size:14px;
+}
+.log li.bad{border-left-color:var(--stop)}
+.log li b{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px}
+.log li span{margin-left:auto;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.log li .retry{margin-left:auto;font-size:12px;font-weight:600;text-decoration:underline;color:var(--stop)}
+
+/* ---------- avisos ---------- */
+.note{
+  background:var(--ink);color:var(--paper);padding:11px 14px;margin-top:16px;
+  font-size:13px;line-height:1.5;
+}
+.note b{color:var(--hazard)}
+.toast{
+  position:fixed;left:16px;right:16px;bottom:88px;z-index:30;
+  background:var(--ink);color:var(--paper);padding:14px 16px;
+  font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.06em;text-align:center;
+  transform:translateY(140%);transition:transform .22s ease;
+}
+.toast.on{transform:translateY(0)}
+.toast.bad{background:var(--stop)}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="band"></div>
+
+<header>
+  <div class="wrap">
+    <h1><span>Devoluções</span>Conferência</h1>
+    <div class="tally"><b id="tally">0</b><i>enviados</i></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- 1. CÓDIGO -->
+  <section class="step" id="stepCode">
+    <div class="step-hd"><b>1</b><h2>Código do pacote</h2></div>
+    <div id="viewfinder"><video id="cam" playsinline muted></video><div class="reticle"></div></div>
+    <div class="step-bd">
+      <div class="tag" id="tagBox" hidden><i>Código lido</i><b id="tagCode">—</b></div>
+      <button class="btn" id="btnScan">Ler QR code</button>
+      <div class="row" id="rowAlt">
+        <button class="btn ghost small" id="btnType">Digitar código</button>
+      </div>
+      <div class="row" id="rowRedo" hidden>
+        <button class="btn ghost small" id="btnRedo">Ler outro código</button>
+      </div>
+      <p class="hint" id="codeHint">Aponte a câmera para o QR code da etiqueta. Se estiver rasgado ou sujo, use “Digitar código”.</p>
+    </div>
+  </section>
+
+  <!-- 2. MOTIVO -->
+  <section class="step" id="stepReason" hidden>
+    <div class="step-hd"><b>2</b><h2>O que houve</h2></div>
+    <div class="step-bd">
+      <div class="opts" id="opts"></div>
+      <div class="counts" id="counts">
+        <label><span>Chegaram</span><input type="number" id="qtyGot" inputmode="numeric" min="0" placeholder="0"></label>
+        <label><span>Deveriam vir</span><input type="number" id="qtyTot" inputmode="numeric" min="1" placeholder="10"></label>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. FOTOS -->
+  <section class="step" id="stepPhotos" hidden>
+    <div class="step-hd"><b>3</b><h2>Fotos</h2><em id="shotCount">0 de 3</em></div>
+    <div class="step-bd">
+      <div class="slots" id="slots"></div>
+      <p class="hint">A primeira foto é obrigatória. Ideal: o pacote, os itens ao lado do pacote e um close do problema.</p>
+    </div>
+  </section>
+
+  <div class="note" id="modeNote" hidden></div>
+
+  <section class="log" id="log" hidden>
+    <h3>Enviados nesta sessão</h3>
+    <ol id="logList"></ol>
+  </section>
+
+</main>
+
+<div class="dock">
+  <div class="wrap"><button class="btn" id="btnSend" disabled>Enviar</button></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<input type="file" id="picker" accept="image/*" capture="environment" hidden>
+
+<script>
+/* ============================================================
+   CONFIGURAÇÃO — preencher antes de usar de verdade
+   ============================================================ */
+const CONFIG = {
+  WEBHOOK_URL: '',            // URL do Web App do Apps Script
+  TOKEN:       '',            // mesmo token secreto do Apps Script
+  LOJA:        'magiainfantil',
+  MAX_LADO:    1600,          // maior lado da foto, em pixels
+  QUALIDADE:   0.82           // compressão JPEG
+};
+
+/* Os 5 motivos do funcionário e para qual motivo da Shopee cada um vai.
+   shopee = 1 danos físicos | 2 faltando peças | 3 produto diferente     */
+const MOTIVOS = [
+  {id:'sujo',      rotulo:'Sujo',              nota:'Manchado, encardido',        shopee:1},
+  {id:'rasgado',   rotulo:'Rasgado',           nota:'Furo, corte, descosturado',  shopee:1},
+  {id:'amassado',  rotulo:'Amassado',          nota:'Quebrado, deformado',        shopee:1},
+  {id:'faltando',  rotulo:'Faltando peças',    nota:'Veio menos do que saiu',     shopee:2},
+  {id:'diferente', rotulo:'Produto diferente', nota:'Não é o que enviamos',       shopee:3}
+];
+
+/* ============================================================ */
+const $ = s => document.querySelector(s);
+let estado = { codigo:'', motivo:'', qtyGot:'', qtyTot:'', fotos:[] };
+let stream = null, lendo = false, enviados = 0;
+
+/* ---------- montagem dos motivos ---------- */
+MOTIVOS.forEach(m => {
+  const b = document.createElement('button');
+  b.className = 'opt'; b.type = 'button'; b.dataset.id = m.id;
+  b.innerHTML = `<s></s><u>${m.rotulo}<em>${m.nota}</em></u>`;
+  b.addEventListener('click', () => escolherMotivo(m.id));
+  $('#opts').appendChild(b);
+});
+
+function escolherMotivo(id){
+  estado.motivo = id;
+  document.querySelectorAll('.opt').forEach(o => o.classList.toggle('sel', o.dataset.id === id));
+  $('#counts').classList.toggle('on', id === 'faltando');
+  $('#stepPhotos').hidden = false;
+  revisar();
+}
+
+/* ---------- montagem dos espaços de foto ---------- */
+let alvoFoto = 0;
+for (let i = 0; i < 3; i++){
+  const s = document.createElement('button');
+  s.className = 'slot'; s.type = 'button'; s.dataset.i = i;
+  s.innerHTML = `<span class="plus">+</span>${i === 0 ? 'Obrigatória' : 'Opcional'}`;
+  s.addEventListener('click', e => {
+    if (e.target.classList.contains('kill')) return;
+    alvoFoto = i; $('#picker').value = ''; $('#picker').click();
+  });
+  $('#slots').appendChild(s);
+}
+
+$('#picker').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  aviso('Preparando foto…');
+  try {
+    estado.fotos[alvoFoto] = await comprimir(f);
+    desenharFotos();
+    esconderAviso();
+  } catch (err) {
+    aviso('Não deu para ler essa foto. Tire outra.', true);
+  }
+});
+
+/* Redimensiona e converte para JPEG.
+   Resolve de uma vez o HEIC do iPhone e o limite de 10 MB da Shopee. */
+function comprimir(file){
+  return new Promise((ok, falhou) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let {width:w, height:h} = img;
+      const maior = Math.max(w, h);
+      if (maior > CONFIG.MAX_LADO){
+        const k = CONFIG.MAX_LADO / maior;
+        w = Math.round(w * k); h = Math.round(h * k);
+      }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = c.toDataURL('image/jpeg', CONFIG.QUALIDADE);
+      ok({ dataUrl, kb: Math.round((dataUrl.length * 0.75) / 1024) });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); falhou(new Error('formato não suportado')); };
+    img.src = url;
+  });
+}
+
+function desenharFotos(){
+  document.querySelectorAll('.slot').forEach((s, i) => {
+    const f = estado.fotos[i];
+    if (f){
+      s.classList.add('filled');
+      s.innerHTML = `<img src="${f.dataUrl}" alt="Foto ${i+1}"><span class="kill" role="button" aria-label="Remover foto">×</span>`;
+      s.querySelector('.kill').addEventListener('click', ev => {
+        ev.stopPropagation();
+        estado.fotos[i] = null; desenharFotos(); revisar();
+      });
+    } else {
+      s.classList.remove('filled');
+      s.innerHTML = `<span class="plus">+</span>${i === 0 ? 'Obrigatória' : 'Opcional'}`;
+    }
+  });
+  $('#shotCount').textContent = `${estado.fotos.filter(Boolean).length} de 3`;
+  revisar();
+}
+
+/* ---------- leitura do QR ---------- */
+$('#btnScan').addEventListener('click', abrirCamera);
+$('#btnRedo').addEventListener('click', () => { $('#tagBox').hidden = true; abrirCamera(); });
+$('#btnType').addEventListener('click', () => {
+  const v = prompt('Digite o código da etiqueta (pedido, retorno ou rastreio):');
+  if (v && v.trim()) aplicarCodigo(v.trim().toUpperCase());
+});
+
+async function abrirCamera(){
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } } });
+  } catch (err) {
+    aviso('A câmera não abriu. Use “Digitar código”.', true);
+    return;
+  }
+  const v = $('#cam');
+  v.srcObject = stream; await v.play();
+  $('#viewfinder').classList.add('on');
+  $('#btnScan').textContent = 'Parar leitura';
+  $('#btnScan').removeEventListener('click', abrirCamera);
+  $('#btnScan').addEventListener('click', fecharCamera, { once:true });
+  lendo = true;
+  ('BarcodeDetector' in window) ? lerNativo() : lerBiblioteca();
+}
+
+function fecharCamera(){
+  lendo = false;
+  if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  $('#viewfinder').classList.remove('on');
+  $('#btnScan').textContent = 'Ler QR code';
+  $('#btnScan').addEventListener('click', abrirCamera, { once:true });
+}
+
+async function lerNativo(){
+  const det = new BarcodeDetector({ formats:['qr_code','code_128','ean_13'] });
+  const v = $('#cam');
+  const passo = async () => {
+    if (!lendo) return;
+    try {
+      const achou = await det.detect(v);
+      if (achou.length){ aplicarCodigo(achou[0].rawValue); return; }
+    } catch (e) {}
+    requestAnimationFrame(passo);
+  };
+  passo();
+}
+
+function lerBiblioteca(){
+  const iniciar = () => {
+    const v = $('#cam');
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d', { willReadFrequently:true });
+    const passo = () => {
+      if (!lendo) return;
+      if (v.readyState === v.HAVE_ENOUGH_DATA){
+        c.width = v.videoWidth; c.height = v.videoHeight;
+        ctx.drawImage(v, 0, 0, c.width, c.height);
+        const d = ctx.getImageData(0, 0, c.width, c.height);
+        const r = window.jsQR ? jsQR(d.data, d.width, d.height) : null;
+        if (r && r.data){ aplicarCodigo(r.data); return; }
+      }
+      requestAnimationFrame(passo);
+    };
+    passo();
+  };
+  if (window.jsQR) return iniciar();
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+  s.onload = iniciar;
+  s.onerror = () => aviso('Leitor não carregou. Use “Digitar código”.', true);
+  document.head.appendChild(s);
+}
+
+/* O QR pode vir com URL em volta — fica só o código alfanumérico. */
+function limpar(bruto){
+  const t = String(bruto).trim();
+  const achado = t.match(/[A-Z0-9]{8,}/i);
+  return (achado ? achado[0] : t).toUpperCase();
+}
+
+function aplicarCodigo(bruto){
+  fecharCamera();
+  estado.codigo = limpar(bruto);
+  $('#tagCode').textContent = estado.codigo;
+  $('#tagBox').hidden = false;
+  $('#rowAlt').hidden = true;
+  $('#rowRedo').hidden = false;
+  $('#btnScan').hidden = true;
+  $('#codeHint').textContent = 'Confira se bate com a etiqueta antes de seguir.';
+  $('#stepReason').hidden = false;
+  if (navigator.vibrate) navigator.vibrate(60);
+  $('#stepReason').scrollIntoView({ behavior:'smooth', block:'start' });
+  revisar();
+}
+
+/* ---------- validação e envio ---------- */
+['#qtyGot','#qtyTot'].forEach(s => $(s).addEventListener('input', () => {
+  estado.qtyGot = $('#qtyGot').value; estado.qtyTot = $('#qtyTot').value; revisar();
+}));
+
+function completo(){
+  if (!estado.codigo || !estado.motivo) return false;
+  if (!estado.fotos.filter(Boolean).length) return false;
+  if (estado.motivo === 'faltando'){
+    const g = Number(estado.qtyGot), t = Number(estado.qtyTot);
+    if (!estado.qtyGot || !estado.qtyTot || t <= 0 || g >= t) return false;
+  }
+  return true;
+}
+function revisar(){ $('#btnSend').disabled = !completo(); }
+
+$('#btnSend').addEventListener('click', enviar);
+
+async function enviar(){
+  if (!completo()) return;
+  const m = MOTIVOS.find(x => x.id === estado.motivo);
+  const pacote = {
+    token: CONFIG.TOKEN,
+    loja: CONFIG.LOJA,
+    codigo: estado.codigo,
+    motivo: m.id,
+    motivoShopee: m.shopee,
+    quantidadeRecebida: estado.motivo === 'faltando' ? Number(estado.qtyGot) : null,
+    quantidadeEsperada: estado.motivo === 'faltando' ? Number(estado.qtyTot) : null,
+    registradoEm: new Date().toISOString(),
+    fotos: estado.fotos.filter(Boolean).map(f => f.dataUrl)
+  };
+
+  $('#btnSend').disabled = true;
+  $('#btnSend').textContent = 'Enviando…';
+
+  if (!CONFIG.WEBHOOK_URL){
+    console.log('MODO TESTE — pacote que seria enviado:', pacote);
+    concluir(estado.codigo, m.rotulo, true, 'modo teste');
+    return;
+  }
+
+  try {
+    const r = await fetch(CONFIG.WEBHOOK_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // evita o preflight que o Apps Script não responde
+      body: JSON.stringify(pacote)
+    });
+    const txt = await r.text();
+    if (!r.ok || txt.indexOf('"ok":true') === -1) throw new Error(txt.slice(0, 120));
+    concluir(estado.codigo, m.rotulo, true);
+  } catch (err){
+    concluir(estado.codigo, m.rotulo, false, String(err.message || err));
+  }
+}
+
+function concluir(codigo, rotulo, ok, detalhe){
+  $('#btnSend').textContent = 'Enviar';
+  const li = document.createElement('li');
+  if (ok){
+    enviados++;
+    $('#tally').textContent = enviados;
+    li.innerHTML = `<b>${codigo}</b> ${rotulo} <span>${detalhe || 'ok'}</span>`;
+    document.body.classList.add('is-sent');
+    setTimeout(() => document.body.classList.remove('is-sent'), 1400);
+    aviso(`${codigo} registrado`);
+    if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+    limparTela();
+  } else {
+    li.className = 'bad';
+    li.innerHTML = `<b>${codigo}</b> ${rotulo} <span>não enviou</span>`;
+    aviso('Não enviou. Confira a internet e tente de novo.', true);
+    $('#btnSend').disabled = false;
+  }
+  $('#log').hidden = false;
+  $('#logList').prepend(li);
+}
+
+function limparTela(){
+  estado = { codigo:'', motivo:'', qtyGot:'', qtyTot:'', fotos:[] };
+  $('#tagBox').hidden = true;
+  $('#btnScan').hidden = false;
+  $('#rowAlt').hidden = false;
+  $('#rowRedo').hidden = true;
+  $('#codeHint').textContent = 'Aponte a câmera para o QR code da etiqueta. Se estiver rasgado ou sujo, use “Digitar código”.';
+  $('#stepReason').hidden = true;
+  $('#stepPhotos').hidden = true;
+  $('#counts').classList.remove('on');
+  $('#qtyGot').value = ''; $('#qtyTot').value = '';
+  document.querySelectorAll('.opt').forEach(o => o.classList.remove('sel'));
+  desenharFotos();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+/* ---------- avisos ---------- */
+let tmr;
+function aviso(txt, ruim){
+  const t = $('#toast');
+  t.textContent = txt;
+  t.classList.toggle('bad', !!ruim);
+  t.classList.add('on');
+  clearTimeout(tmr);
+  tmr = setTimeout(() => t.classList.remove('on'), ruim ? 4200 : 1900);
+}
+function esconderAviso(){ clearTimeout(tmr); $('#toast').classList.remove('on'); }
+
+/* ---------- estado inicial ---------- */
+if (!CONFIG.WEBHOOK_URL){
+  $('#modeNote').hidden = false;
+  $('#modeNote').innerHTML = '<b>Modo teste.</b> Nada está sendo salvo ainda — o registro aparece no console do navegador. Preencha WEBHOOK_URL e TOKEN no topo do arquivo para ligar na planilha.';
+}
+if (location.protocol !== 'https:' && location.hostname !== 'localhost'){
+  $('#modeNote').hidden = false;
+  $('#modeNote').innerHTML = '<b>Sem câmera aqui.</b> O navegador só libera a câmera em endereço https. Publique a página (GitHub Pages serve) e abra por lá.';
+}
+desenharFotos();
+</script>
+</body>
+</html>
