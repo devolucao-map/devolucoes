@@ -338,34 +338,82 @@ $('#picker').addEventListener('change', async e => {
     desenharFotos();
     esconderAviso();
   } catch (err) {
-    aviso('Não deu para ler essa foto. Tire outra.', true);
+    console.error('comprimir:', err);
+    const motivo = (err && err.message) ? err.message : 'erro';
+    aviso('Não deu para preparar essa foto (' + motivo + '). Tire outra.', true);
   }
 });
 
 /* Redimensiona e converte para JPEG.
-   Resolve de uma vez o HEIC do iPhone e o limite de 10 MB da Shopee. */
+   Resolve de uma vez o HEIC do iPhone e o limite de 10 MB da Shopee.
+   Nunca fica pendurada: todo caminho termina em ok() ou falhou(). */
 function comprimir(file){
   return new Promise((ok, falhou) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let {width:w, height:h} = img;
-      const maior = Math.max(w, h);
-      if (maior > CONFIG.MAX_LADO){
-        const k = CONFIG.MAX_LADO / maior;
-        w = Math.round(w * k); h = Math.round(h * k);
-      }
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(img, 0, 0, w, h);
-      const dataUrl = c.toDataURL('image/jpeg', CONFIG.QUALIDADE);
-      ok({ dataUrl, kb: Math.round((dataUrl.length * 0.75) / 1024) });
+    let terminou = false, alarme;
+
+    const encerrar = (fn, arg) => {
+      if (terminou) return;
+      terminou = true;
+      clearTimeout(alarme);
+      fn(arg);
     };
-    img.onerror = () => { URL.revokeObjectURL(url); falhou(new Error('formato não suportado')); };
-    img.src = url;
+
+    alarme = setTimeout(() => encerrar(falhou, new Error('demorou demais')), 25000);
+
+    const desenhar = (fonte, lw, lh) => {
+      try {
+        let w = lw, h = lh;
+        if (!w || !h) throw new Error('imagem sem tamanho');
+
+        const maior = Math.max(w, h);
+        if (maior > CONFIG.MAX_LADO){
+          const k = CONFIG.MAX_LADO / maior;
+          w = Math.max(1, Math.round(w * k));
+          h = Math.max(1, Math.round(h * k));
+        }
+
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        if (!ctx) throw new Error('memoria insuficiente');
+
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(fonte, 0, 0, w, h);
+        if (typeof fonte.close === 'function') fonte.close();
+
+        const dataUrl = c.toDataURL('image/jpeg', CONFIG.QUALIDADE);
+        if (!dataUrl || dataUrl.length < 1000) throw new Error('nao gerou imagem');
+
+        encerrar(ok, { dataUrl, kb: Math.round((dataUrl.length * 0.75) / 1024) });
+      } catch (err) {
+        encerrar(falhou, err);
+      }
+    };
+
+    /* Caminho leve: decodifica sem carregar a foto inteira na memória.
+       É o que evita o travamento em celular mais fraco. */
+    if (window.createImageBitmap){
+      createImageBitmap(file)
+        .then(bmp => desenhar(bmp, bmp.width, bmp.height))
+        .catch(() => viaImagem());
+    } else {
+      viaImagem();
+    }
+
+    /* Reserva, para navegador antigo ou formato que o createImageBitmap recusa. */
+    function viaImagem(){
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        desenhar(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        encerrar(falhou, new Error('formato nao suportado'));
+      };
+      img.src = url;
+    }
   });
 }
 
