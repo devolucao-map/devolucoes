@@ -153,6 +153,10 @@ button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;backgrou
 .slot .plus{font-size:30px;line-height:.8;font-weight:600;color:var(--ink)}
 .slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .slot.filled{border-style:solid;border-color:var(--ink)}
+.slot.busy{border-style:solid;border-color:var(--ink);background:var(--hazard)}
+.slot.busy .plus{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.slot.busy .plus{animation:none}}
 .slot .kill{
   position:absolute;top:0;right:0;width:34px;height:34px;
   background:var(--ink);color:var(--paper);font-size:19px;line-height:34px;text-align:center;
@@ -277,11 +281,11 @@ button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;backgrou
    CONFIGURAÇÃO — preencher antes de usar de verdade
    ============================================================ */
 const CONFIG = {
-  WEBHOOK_URL: 'https://script.google.com/macros/s/AKfycbzrKEXaYqoniHaQ1UEnUX5o-1PHDWQV7OcNeWhIFKqb9xWqWC0ce2Jkr6VIfSXLHKUXtA/exec',            // URL do Web App do Apps Script
-  TOKEN:       'mgi-dev-tjzarvz8xc',            // mesmo token secreto do Apps Script
+  WEBHOOK_URL: '',            // URL do Web App do Apps Script
+  TOKEN:       '',            // mesmo token secreto do Apps Script
   LOJA:        'magiainfantil',
-  MAX_LADO:    1600,          // maior lado da foto, em pixels
-  QUALIDADE:   0.82           // compressão JPEG
+  MAX_LADO:    1280,          // maior lado da foto, em pixels
+  QUALIDADE:   0.75           // compressão JPEG
 };
 
 /* Os 5 motivos do funcionário e para qual motivo da Shopee cada um vai.
@@ -332,88 +336,70 @@ for (let i = 0; i < 3; i++){
 $('#picker').addEventListener('change', async e => {
   const f = e.target.files[0];
   if (!f) return;
-  aviso('Preparando foto…');
+  const slot = document.querySelectorAll('.slot')[alvoFoto];
+  slot.classList.add('busy');
+  slot.innerHTML = '<span class="plus">···</span>preparando';
   try {
+    const antiga = estado.fotos[alvoFoto];
+    if (antiga && antiga.url) URL.revokeObjectURL(antiga.url);
     estado.fotos[alvoFoto] = await comprimir(f);
-    desenharFotos();
     esconderAviso();
   } catch (err) {
-    console.error('comprimir:', err);
-    const motivo = (err && err.message) ? err.message : 'erro';
-    aviso('Não deu para preparar essa foto (' + motivo + '). Tire outra.', true);
+    aviso('Não deu para ler essa foto. Tire outra.', true);
   }
+  slot.classList.remove('busy');
+  desenharFotos();
 });
 
 /* Redimensiona e converte para JPEG.
-   Resolve de uma vez o HEIC do iPhone e o limite de 10 MB da Shopee.
-   Nunca fica pendurada: todo caminho termina em ok() ou falhou(). */
-function comprimir(file){
+   Resolve de uma vez o HEIC do iPhone e o limite de 10 MB da Shopee. */
+async function comprimir(file){
+  const alvo = CONFIG.MAX_LADO;
+
+  // createImageBitmap já decodifica em tamanho reduzido, sem travar a tela.
+  let fonte = null;
+  if ('createImageBitmap' in window){
+    try { fonte = await createImageBitmap(file, { resizeWidth: alvo, resizeQuality:'medium' }); }
+    catch (e){ try { fonte = await createImageBitmap(file); } catch (e2){ fonte = null; } }
+  }
+  if (!fonte) fonte = await viaImg(file);   // caminho reserva
+
+  let w = fonte.width, h = fonte.height;
+  const maior = Math.max(w, h);
+  if (maior > alvo){ const k = alvo / maior; w = Math.round(w * k); h = Math.round(h * k); }
+
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(fonte, 0, 0, w, h);
+  if (fonte.close) fonte.close();
+
+  // toBlob é assíncrono: não congela a interface como o toDataURL fazia.
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', CONFIG.QUALIDADE));
+  c.width = c.height = 0;
+  if (!blob) throw new Error('conversão falhou');
+
+  return { blob, url: URL.createObjectURL(blob), kb: Math.round(blob.size / 1024) };
+}
+
+function viaImg(file){
   return new Promise((ok, falhou) => {
-    let terminou = false, alarme;
+    const img = new Image();
+    const u = URL.createObjectURL(file);
+    img.onload  = () => { URL.revokeObjectURL(u); ok(img); };
+    img.onerror = () => { URL.revokeObjectURL(u); falhou(new Error('formato não suportado')); };
+    img.src = u;
+  });
+}
 
-    const encerrar = (fn, arg) => {
-      if (terminou) return;
-      terminou = true;
-      clearTimeout(alarme);
-      fn(arg);
-    };
-
-    alarme = setTimeout(() => encerrar(falhou, new Error('demorou demais')), 25000);
-
-    const desenhar = (fonte, lw, lh) => {
-      try {
-        let w = lw, h = lh;
-        if (!w || !h) throw new Error('imagem sem tamanho');
-
-        const maior = Math.max(w, h);
-        if (maior > CONFIG.MAX_LADO){
-          const k = CONFIG.MAX_LADO / maior;
-          w = Math.max(1, Math.round(w * k));
-          h = Math.max(1, Math.round(h * k));
-        }
-
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        const ctx = c.getContext('2d');
-        if (!ctx) throw new Error('memoria insuficiente');
-
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(fonte, 0, 0, w, h);
-        if (typeof fonte.close === 'function') fonte.close();
-
-        const dataUrl = c.toDataURL('image/jpeg', CONFIG.QUALIDADE);
-        if (!dataUrl || dataUrl.length < 1000) throw new Error('nao gerou imagem');
-
-        encerrar(ok, { dataUrl, kb: Math.round((dataUrl.length * 0.75) / 1024) });
-      } catch (err) {
-        encerrar(falhou, err);
-      }
-    };
-
-    /* Caminho leve: decodifica sem carregar a foto inteira na memória.
-       É o que evita o travamento em celular mais fraco. */
-    if (window.createImageBitmap){
-      createImageBitmap(file)
-        .then(bmp => desenhar(bmp, bmp.width, bmp.height))
-        .catch(() => viaImagem());
-    } else {
-      viaImagem();
-    }
-
-    /* Reserva, para navegador antigo ou formato que o createImageBitmap recusa. */
-    function viaImagem(){
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        desenhar(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        encerrar(falhou, new Error('formato nao suportado'));
-      };
-      img.src = url;
-    }
+// O base64 só é gerado na hora do envio, uma foto de cada vez.
+function paraBase64(blob){
+  return new Promise((ok, falhou) => {
+    const r = new FileReader();
+    r.onload  = () => ok(r.result);
+    r.onerror = () => falhou(new Error('falha ao ler a foto'));
+    r.readAsDataURL(blob);
   });
 }
 
@@ -422,9 +408,10 @@ function desenharFotos(){
     const f = estado.fotos[i];
     if (f){
       s.classList.add('filled');
-      s.innerHTML = `<img src="${f.dataUrl}" alt="Foto ${i+1}"><span class="kill" role="button" aria-label="Remover foto">×</span>`;
+      s.innerHTML = `<img src="${f.url}" alt="Foto ${i+1}" loading="lazy" decoding="async"><span class="kill" role="button" aria-label="Remover foto">×</span>`;
       s.querySelector('.kill').addEventListener('click', ev => {
         ev.stopPropagation();
+        if (f.url) URL.revokeObjectURL(f.url);
         estado.fotos[i] = null; desenharFotos(); revisar();
       });
     } else {
@@ -552,6 +539,19 @@ $('#btnSend').addEventListener('click', enviar);
 async function enviar(){
   if (!completo()) return;
   const m = MOTIVOS.find(x => x.id === estado.motivo);
+
+  $('#btnSend').disabled = true;
+  $('#btnSend').textContent = 'Preparando…';
+  let fotosB64;
+  try {
+    fotosB64 = await Promise.all(estado.fotos.filter(Boolean).map(f => paraBase64(f.blob)));
+  } catch (err){
+    $('#btnSend').textContent = 'Enviar';
+    $('#btnSend').disabled = false;
+    aviso('Falha ao preparar as fotos. Tente de novo.', true);
+    return;
+  }
+
   const pacote = {
     token: CONFIG.TOKEN,
     loja: CONFIG.LOJA,
@@ -561,10 +561,9 @@ async function enviar(){
     quantidadeRecebida: estado.motivo === 'faltando' ? Number(estado.qtyGot) : null,
     quantidadeEsperada: estado.motivo === 'faltando' ? Number(estado.qtyTot) : null,
     registradoEm: new Date().toISOString(),
-    fotos: estado.fotos.filter(Boolean).map(f => f.dataUrl)
+    fotos: fotosB64
   };
 
-  $('#btnSend').disabled = true;
   $('#btnSend').textContent = 'Enviando…';
 
   if (!CONFIG.WEBHOOK_URL){
@@ -610,6 +609,7 @@ function concluir(codigo, rotulo, ok, detalhe){
 }
 
 function limparTela(){
+  estado.fotos.forEach(f => { if (f && f.url) URL.revokeObjectURL(f.url); });
   estado = { codigo:'', motivo:'', qtyGot:'', qtyTot:'', fotos:[] };
   $('#tagBox').hidden = true;
   $('#btnScan').hidden = false;
