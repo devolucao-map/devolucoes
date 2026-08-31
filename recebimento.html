@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101010">
+<title>Bipagem de devoluções</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#101010; --field:#E6E4DE; --paper:#FFFFFF;
+  --hazard:#FFD400; --go:#12734F; --stop:#C0271A;
+  --muted:#6B6862; --line:#C9C6BE;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--field);color:var(--ink)}
+body{font-family:'Barlow',system-ui,sans-serif;font-size:17px;line-height:1.45;padding-bottom:96px}
+.wrap{max-width:520px;margin:0 auto;padding:0 16px}
+
+.band{height:14px;background:repeating-linear-gradient(-45deg,var(--hazard) 0 14px,var(--ink) 14px 28px);transition:background .2s}
+body.hit .band{background:var(--go)}
+body.dupe .band{background:var(--stop)}
+
+header{background:var(--ink);color:var(--paper);padding:14px 0}
+header .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:25px;line-height:1;text-transform:uppercase;letter-spacing:.045em}
+h1 span{display:block;font-size:11px;font-weight:500;letter-spacing:.22em;color:var(--hazard);margin-bottom:5px}
+.pill{font-family:'Barlow Condensed',sans-serif;font-size:12px;letter-spacing:.14em;text-transform:uppercase;padding:4px 9px;border:1.5px solid var(--muted);color:var(--muted)}
+.pill.on{border-color:var(--hazard);color:var(--hazard)}
+
+/* contador grande */
+.score{background:var(--ink);color:var(--paper);padding:0 0 20px;text-align:center}
+.score b{font-family:'IBM Plex Mono',monospace;font-size:76px;font-weight:600;line-height:.95;display:block}
+.score i{font-style:normal;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+
+/* câmera */
+#view{position:relative;width:100%;aspect-ratio:4/3;background:var(--ink);display:none;overflow:hidden}
+#view.on{display:block}
+#view video{width:100%;height:100%;object-fit:cover;display:block}
+.ret{position:absolute;inset:14% 10%;border:3px solid var(--hazard);box-shadow:0 0 0 2000px rgba(16,16,16,.4)}
+.ret::after{content:'';position:absolute;left:0;right:0;top:0;height:3px;background:var(--hazard);animation:sweep 2s ease-in-out infinite}
+@keyframes sweep{0%,100%{top:0}50%{top:calc(100% - 3px)}}
+@media (prefers-reduced-motion:reduce){.ret::after{animation:none}}
+.flash{position:absolute;inset:0;background:var(--go);opacity:0;pointer-events:none}
+.flash.go{animation:pop .45s ease-out}
+.flash.no{background:var(--stop);animation:pop .45s ease-out}
+@keyframes pop{0%{opacity:.75}100%{opacity:0}}
+
+/* último lido */
+.last{background:var(--paper);border:1.5px solid var(--ink);margin-top:16px;padding:14px;text-align:center}
+.last i{font-style:normal;display:block;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.last b{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;word-break:break-all;display:block}
+.last.dupe{background:var(--stop);border-color:var(--stop);color:var(--paper)}
+.last.dupe i{color:#ffd9d5}
+
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;padding:12px 16px;
+  background:var(--ink);color:var(--paper);border:1.5px solid var(--ink);
+  font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:20px;text-transform:uppercase;letter-spacing:.07em}
+.btn.ghost{background:var(--paper);color:var(--ink)}
+.btn.small{min-height:46px;font-size:16px}
+.btn:disabled{opacity:.4}
+.btn:focus-visible{outline:3px solid var(--hazard);outline-offset:2px}
+.row{display:flex;gap:9px;margin-top:12px}
+.row .btn{flex:1}
+
+.list{margin-top:22px}
+.list h3{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);margin-bottom:9px;display:flex;justify-content:space-between}
+.list ol{list-style:none;display:grid;gap:5px}
+.list li{display:flex;align-items:center;gap:10px;background:var(--paper);border-left:5px solid var(--go);padding:8px 12px}
+.list li.err{border-left-color:var(--stop)}
+.list li b{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px}
+.list li span{margin-left:auto;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+
+.note{background:var(--ink);color:var(--paper);padding:11px 14px;margin-top:16px;font-size:13px;line-height:1.5}
+.note b{color:var(--hazard)}
+
+.som{margin-top:16px;background:var(--paper);border:1.5px solid var(--line)}
+.som summary{padding:12px 14px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;
+  font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.som[open] summary{border-bottom:1.5px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:7px;padding:4px 14px}
+.grupo{padding:14px 14px 0;font-family:'Barlow Condensed',sans-serif;font-size:13px;
+  font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--muted)}
+.chip{padding:9px 13px;border:1.5px solid var(--line);background:var(--paper);
+  font-family:'Barlow Condensed',sans-serif;font-size:15px;text-transform:uppercase;letter-spacing:.06em}
+.chip.sel{border-color:var(--ink);background:var(--hazard)}
+.vol{display:block;padding:12px 14px 4px;font-size:13px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted)}
+.vol input{width:100%;margin-top:8px;accent-color:var(--ink)}
+.dica{padding:8px 14px 14px;font-size:12.5px;color:var(--muted);line-height:1.5}
+.dica code{font-family:'IBM Plex Mono',monospace;font-size:12px;background:var(--field);padding:1px 5px}
+
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--field);border-top:1.5px solid var(--ink);
+  padding:11px 16px calc(11px + env(safe-area-inset-bottom))}
+.dock .wrap{padding:0}
+.toast{position:fixed;left:16px;right:16px;bottom:84px;z-index:30;background:var(--ink);color:var(--paper);
+  padding:13px 16px;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.06em;text-align:center;transform:translateY(150%);transition:transform .2s}
+.toast.on{transform:translateY(0)}
+.toast.bad{background:var(--stop)}
+</style>
+</head>
+<body>
+
+<div class="band"></div>
+
+<header>
+  <div class="wrap">
+    <h1><span>Recebimento</span>Bipagem</h1>
+    <span class="pill" id="pill">Parado</span>
+  </div>
+</header>
+
+<div class="score"><b id="score">0</b><i>pacotes bipados hoje</i></div>
+
+<div id="view"><video id="cam" playsinline muted></video><div class="ret"></div><div class="flash" id="flash"></div></div>
+
+<main class="wrap">
+
+  <div class="last" id="last" hidden><i>Último lido</i><b id="lastCode">—</b></div>
+
+  <div class="row">
+    <button class="btn" id="btnGo">Começar a bipar</button>
+  </div>
+  <div class="row">
+    <button class="btn ghost small" id="btnType">Digitar código</button>
+    <button class="btn ghost small" id="btnRetry" hidden>Reenviar pendentes</button>
+  </div>
+
+  <div class="note" id="note" hidden></div>
+
+  <details class="som">
+    <summary>Sons</summary>
+    <p class="grupo">Ao bipar certo</p>
+    <div class="chips" id="chips"></div>
+    <p class="grupo">Ao bipar repetido</p>
+    <div class="chips" id="chipsErro"></div>
+    <label class="vol">Volume
+      <input type="range" id="vol" min="0" max="1" step="0.05">
+    </label>
+    <p class="dica">Toque numa opção para ouvir. Para fixar, mude <code>SOM</code> e <code>SOM_ERRO</code> no topo do arquivo — ou passe no link: <code>?som=sino&amp;erro=alarme</code></p>
+  </details>
+
+  <section class="list" id="list" hidden>
+    <h3><span>Bipados nesta sessão</span><span id="pend"></span></h3>
+    <ol id="items"></ol>
+  </section>
+
+</main>
+
+<div class="dock"><div class="wrap"><button class="btn ghost" id="btnStop" disabled>Parar</button></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   CONFIGURAÇÃO — os dois primeiros campos vêm do mesmo Apps Script
+   já usado na página de conferência.
+   ============================================================ */
+const CONFIG = {
+  WEBHOOK_URL: 'https://script.google.com/macros/s/AKfycbzrKEXaYqoniHaQ1UEnUX5o-1PHDWQV7OcNeWhIFKqb9xWqWC0ce2Jkr6VIfSXLHKUXtA/exec',
+  TOKEN:       'mgi-dev-tjzarvz8xc',
+  LOJA:        'magiainfantil',
+  ABA:         'Recebimentos',   // aba de destino na planilha
+  ESPERA:      1600,             // tempo mínimo entre duas leituras, em ms
+  SOM:         'sino',           // agudo | duplo | sino | caixa | sobe | voz
+  SOM_ERRO:    'errou',          // errou | grave | alarme | zumbido | sirene | voz
+  SOM_ARQUIVO: '',               // URL de um mp3 seu; se preenchido, tem prioridade no acerto
+  VOLUME:      0.35              // de 0 a 1
+};
+
+// O link pode forçar os sons: ...recebimento.html?som=sino&erro=alarme
+const _q = new URLSearchParams(location.search);
+if (_q.get('som'))  CONFIG.SOM = _q.get('som');
+if (_q.get('erro')) CONFIG.SOM_ERRO = _q.get('erro');
+
+const $ = s => document.querySelector(s);
+let stream=null, lendo=false, det=null;
+let vistos=new Set(), fila=[], total=0, ultimoEm=0;
+
+/* ---------- sons ---------- */
+let ac=null, mp3=null;
+
+function tom(seq, tipo='sine', cauda=0){
+  try{
+    ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.state==='suspended') ac.resume();
+    let t = ac.currentTime;
+    seq.forEach(([f,d])=>{
+      if(f>0){
+        const o=ac.createOscillator(), g=ac.createGain();
+        o.type=tipo; o.frequency.value=f;
+        o.connect(g); g.connect(ac.destination);
+        g.gain.setValueAtTime(.0001, t);
+        g.gain.exponentialRampToValueAtTime(Math.max(.001,CONFIG.VOLUME), t+.008);
+        g.gain.exponentialRampToValueAtTime(.0001, t+d+cauda);
+        o.start(t); o.stop(t+d+cauda+.03);
+      }
+      t += d;
+    });
+  }catch(e){}
+}
+
+function falar(txt){
+  try{
+    const u=new SpeechSynthesisUtterance(txt);
+    u.lang='pt-BR'; u.rate=1.4; u.volume=Math.min(1, CONFIG.VOLUME*2.4);
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+const SONS = {
+  agudo: { rotulo:'Bip agudo',  toca:()=>tom([[1180,.13]]) },
+  duplo: { rotulo:'Bip duplo',  toca:()=>tom([[1100,.07],[0,.05],[1500,.09]]) },
+  sino:  { rotulo:'Sino',       toca:()=>tom([[1568,.09]],'sine',.55) },
+  caixa: { rotulo:'Mercado',    toca:()=>tom([[2100,.09]],'square') },
+  sobe:  { rotulo:'Subindo',    toca:()=>tom([[880,.08],[0,.02],[1320,.12]]) },
+  voz:   { rotulo:'Voz',        toca:()=>falar('ok') }
+};
+
+/* Buzzer de programa de auditório: dois osciladores levemente desafinados
+   criam o batimento áspero, e a queda de tom no fim faz o "eeeehh". */
+function buzina(){
+  try{
+    ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.state==='suspended') ac.resume();
+    const t=ac.currentTime, dur=.85, v=Math.max(.001, CONFIG.VOLUME);
+    const g=ac.createGain(); g.connect(ac.destination);
+    g.gain.setValueAtTime(.0001,t);
+    g.gain.exponentialRampToValueAtTime(v, t+.025);
+    g.gain.setValueAtTime(v, t+dur-.14);
+    g.gain.exponentialRampToValueAtTime(.0001, t+dur);
+    [146, 150.5].forEach(f=>{
+      const o=ac.createOscillator();
+      o.type='sawtooth';
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.setValueAtTime(f, t+dur-.2);
+      o.frequency.linearRampToValueAtTime(f*.85, t+dur);
+      o.connect(g); o.start(t); o.stop(t+dur+.03);
+    });
+  }catch(e){}
+}
+
+const SONS_ERRO = {
+  errou:   { rotulo:'Errou!',      toca:()=>buzina() },
+  grave:   { rotulo:'Grave duplo', toca:()=>tom([[300,.16],[0,.05],[240,.28]],'square') },
+  alarme:  { rotulo:'Alarme',      toca:()=>tom([[520,.09],[0,.03],[440,.09],[0,.03],[360,.18]],'square') },
+  zumbido: { rotulo:'Zumbido',     toca:()=>tom([[190,.45]],'sawtooth') },
+  sirene:  { rotulo:'Sirene',      toca:()=>tom([[700,.11],[520,.11],[700,.11],[520,.17]],'square') },
+  voz:     { rotulo:'Voz',         toca:()=>falar('repetido') }
+};
+
+function bip(ok){
+  if(ok && CONFIG.SOM_ARQUIVO){
+    try{
+      mp3 = mp3 || new Audio(CONFIG.SOM_ARQUIVO);
+      mp3.volume = CONFIG.VOLUME;
+      mp3.currentTime = 0; mp3.play();
+      return;
+    }catch(e){}
+  }
+  const s = ok ? (SONS[CONFIG.SOM] || SONS.sino)
+               : (SONS_ERRO[CONFIG.SOM_ERRO] || SONS_ERRO.errou);
+  s.toca();
+}
+
+/* ---------- câmera e leitura contínua ---------- */
+$('#btnGo').addEventListener('click', ligar);
+$('#btnStop').addEventListener('click', desligar);
+
+async function ligar(){
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+  }catch(e){ aviso('A câmera não abriu. Use “Digitar código”.', true); return; }
+  const v=$('#cam'); v.srcObject=stream; await v.play();
+  $('#view').classList.add('on');
+  $('#pill').textContent='Lendo'; $('#pill').classList.add('on');
+  $('#btnGo').disabled=true; $('#btnStop').disabled=false;
+  lendo=true;
+  if(ac && ac.state==='suspended') ac.resume();
+  ('BarcodeDetector' in window) ? nativo() : biblioteca();
+}
+
+function desligar(){
+  lendo=false;
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  $('#view').classList.remove('on');
+  $('#pill').textContent='Parado'; $('#pill').classList.remove('on');
+  $('#btnGo').disabled=false; $('#btnStop').disabled=true;
+}
+
+async function nativo(){
+  det = det || new BarcodeDetector({formats:['qr_code','code_128','ean_13','code_39']});
+  const v=$('#cam');
+  const passo=async()=>{
+    if(!lendo) return;
+    try{ const r=await det.detect(v); if(r.length) registrar(r[0].rawValue); }catch(e){}
+    requestAnimationFrame(passo);
+  };
+  passo();
+}
+
+function biblioteca(){
+  const iniciar=()=>{
+    const v=$('#cam'), c=document.createElement('canvas');
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    const passo=()=>{
+      if(!lendo) return;
+      if(v.readyState===v.HAVE_ENOUGH_DATA){
+        c.width=v.videoWidth; c.height=v.videoHeight;
+        ctx.drawImage(v,0,0,c.width,c.height);
+        const d=ctx.getImageData(0,0,c.width,c.height);
+        const r=window.jsQR?jsQR(d.data,d.width,d.height):null;
+        if(r&&r.data) registrar(r.data);
+      }
+      requestAnimationFrame(passo);
+    };
+    passo();
+  };
+  if(window.jsQR) return iniciar();
+  const s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+  s.onload=iniciar;
+  s.onerror=()=>aviso('Leitor não carregou. Use “Digitar código”.',true);
+  document.head.appendChild(s);
+}
+
+function limpar(bruto){
+  const t=String(bruto).trim();
+  const m=t.match(/[A-Z0-9]{8,}/i);
+  return (m?m[0]:t).toUpperCase();
+}
+
+/* ---------- registro ---------- */
+function registrar(bruto){
+  const agora=Date.now();
+  if(agora-ultimoEm < CONFIG.ESPERA) return;   // evita reler o mesmo código em rajada
+  const cod=limpar(bruto);
+  if(!cod) return;
+  ultimoEm=agora;
+
+  $('#last').hidden=false;
+  $('#lastCode').textContent=cod;
+
+  if(vistos.has(cod)){                          // pacote já bipado
+    $('#last').classList.add('dupe');
+    $('#flash').className='flash no';
+    document.body.classList.add('dupe');
+    bip(false);
+    if(navigator.vibrate) navigator.vibrate([90,70,90]);
+    aviso('Já bipado — não contou de novo', true);
+    setTimeout(()=>{ document.body.classList.remove('dupe'); $('#flash').className='flash'; },500);
+    return;
+  }
+
+  vistos.add(cod);
+  total++;
+  $('#score').textContent=total;
+  $('#last').classList.remove('dupe');
+  $('#flash').className='flash go';
+  document.body.classList.add('hit');
+  bip(true);
+  if(navigator.vibrate) navigator.vibrate(55);
+  setTimeout(()=>{ document.body.classList.remove('hit'); $('#flash').className='flash'; },500);
+
+  const li=document.createElement('li');
+  li.innerHTML=`<b>${cod}</b><span>enviando</span>`;
+  $('#list').hidden=false;
+  $('#items').prepend(li);
+  enviar(cod, li);
+}
+
+$('#btnType').addEventListener('click',()=>{
+  const v=prompt('Digite o código da etiqueta:');
+  if(v&&v.trim()){ ultimoEm=0; registrar(v.trim()); }
+});
+
+/* ---------- envio ---------- */
+async function enviar(cod, li){
+  const pacote={
+    token:CONFIG.TOKEN, loja:CONFIG.LOJA, aba:CONFIG.ABA,
+    tipo:'recebimento', codigo:cod, bipadoEm:new Date().toISOString()
+  };
+
+  if(!CONFIG.WEBHOOK_URL){
+    li.querySelector('span').textContent='modo teste';
+    console.log('MODO TESTE — bipagem:',pacote);
+    return;
+  }
+
+  try{
+    const r=await fetch(CONFIG.WEBHOOK_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(pacote)
+    });
+    const t=await r.text();
+    if(!r.ok||t.indexOf('"ok":true')===-1) throw new Error('recusado');
+    li.querySelector('span').textContent='ok';
+  }catch(e){
+    li.classList.add('err');
+    li.querySelector('span').textContent='pendente';
+    fila.push({cod,li});
+    marcarPendentes();
+  }
+}
+
+function marcarPendentes(){
+  const n=fila.length;
+  $('#pend').textContent = n ? `${n} pendente${n>1?'s':''}` : '';
+  $('#btnRetry').hidden = n===0;
+}
+
+$('#btnRetry').addEventListener('click', async()=>{
+  const copia=fila.slice(); fila=[]; marcarPendentes();
+  $('#btnRetry').disabled=true;
+  for(const item of copia){
+    item.li.classList.remove('err');
+    item.li.querySelector('span').textContent='reenviando';
+    await enviar(item.cod,item.li);
+  }
+  $('#btnRetry').disabled=false;
+  aviso(fila.length?'Ainda tem pendente':'Tudo enviado');
+});
+
+/* ---------- avisos ---------- */
+let tmr;
+function aviso(txt,ruim){
+  const t=$('#toast');
+  t.textContent=txt; t.classList.toggle('bad',!!ruim); t.classList.add('on');
+  clearTimeout(tmr); tmr=setTimeout(()=>t.classList.remove('on'), ruim?2600:1500);
+}
+
+/* ---------- escolha dos sons ---------- */
+function montarChips(alvo, conjunto, chave){
+  Object.keys(conjunto).forEach(k=>{
+    const b=document.createElement('button');
+    b.className='chip'+(k===CONFIG[chave]?' sel':'');
+    b.type='button'; b.dataset.k=k; b.textContent=conjunto[k].rotulo;
+    b.addEventListener('click',()=>{
+      CONFIG[chave]=k;
+      alvo.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',c.dataset.k===k));
+      conjunto[k].toca();
+    });
+    alvo.appendChild(b);
+  });
+}
+montarChips($('#chips'), SONS, 'SOM');
+montarChips($('#chipsErro'), SONS_ERRO, 'SOM_ERRO');
+
+$('#vol').value=CONFIG.VOLUME;
+$('#vol').addEventListener('change',e=>{ CONFIG.VOLUME=Number(e.target.value); bip(true); });
+
+/* ---------- avisos de partida ---------- */
+if(!CONFIG.WEBHOOK_URL){
+  $('#note').hidden=false;
+  $('#note').innerHTML='<b>Modo teste.</b> Nada está sendo salvo — preencha WEBHOOK_URL e TOKEN no topo do arquivo.';
+}
+if(location.protocol!=='https:'&&location.hostname!=='localhost'){
+  $('#note').hidden=false;
+  $('#note').innerHTML='<b>Sem câmera aqui.</b> O navegador só libera a câmera em endereço https. Abra pela página publicada.';
+}
+window.addEventListener('beforeunload',e=>{ if(fila.length){ e.preventDefault(); e.returnValue=''; } });
+</script>
+</body>
+</html>
